@@ -1,0 +1,25 @@
+{
+  "name": "screwyo",
+  "version": "0.0.1",
+  "description": "It's a card game.",
+  "main": "app.js",
+  "scripts": {
+    "test": "mocha --reporter spec"
+  },
+  "keywords": [
+    "cards",
+    "screw",
+    "your",
+    "neighbor",
+    "game"
+  ],
+  "author": "Brekk Bockrath",
+  "license": "ISC",
+  "dependencies": {
+    "ampersand-collection": "^1.4.5",
+    "ampersand-collection-lodash-mixin": "^2.0.1",
+    "ampersand-state": "^4.5.4",
+    "lodash": "^3.8.0",
+    "random-uuid-v4": "0.0.4"
+  }
+}
