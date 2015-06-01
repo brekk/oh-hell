@@ -16,132 +16,29 @@ Psuedo Models
 
     "use strict"
     _ = require 'lodash'
-    Model = require 'ampersand-state'
-    Collection = require 'ampersand-collection'
-    lodashMixin = require 'ampersand-collection-lodash-mixin'
-    uuid = require 'random-uuid-v4'
+    debug = require('debug') 'oh-hell'
 
-    SUIT_HEARTS = 'hearts'
-    SUIT_CLUBS = 'clubs'
-    SUIT_DIAMONDS = 'diamonds'
-    SUIT_SPADES = 'spades'
+    {THE_SUITS, DECK_OWNER, isValidSuit} = require './lib/environment'
 
-    THE_SUITS = [
-        SUIT_HEARTS
-        SUIT_CLUBS
-        SUIT_DIAMONDS
-        SUIT_SPADES
-    ]
+    Card = require './lib/card'
 
-    Card = Model.extend
-        idAttribute: 'id'
-        props: {
-            suit:
-                type: 'string'
-                values: THE_SUITS
-                required: true
-            value:
-                type: 'number'
-                values: [2..14]
-                required: true
-        }
-        session: {
-            id:
-                required: true
-                type: 'string'
-                default: ()->
-                    return uuid()
-        }
-        derived: {
-            readable:
-                deps: [
-                    'suit'
-                    'value'
-                ]
-                cache: true
-                fn: ()->
-                    self = @
-                    barf = (v)->
-                        return v + ' of ' + self.suit
-                    unless @value > 10
-                        return barf @value
-                    pretty = switch @value
-                        when 11 then barf "jack"
-                        when 12 then barf "queen"
-                        when 13 then barf "king"
-                        when 14 then barf "ace"
-                    return pretty
-        }
+    CardCollection = require './lib/card-collection'
 
-    CardCollection = Collection.extend lodashMixin, {
-        model: Card
-        mainIndex: 'id'
-        indexes: ['suit', 'value']
-    }
+    Deck = require './lib/deck'
 
-    Deck = Model.extend
-        collections:
-            hearts: CardCollection
-            clubs: CardCollection
-            diamonds: CardCollection
-            spades: CardCollection
-        derived:
-            cards:
-                deps: THE_SUITS
-                cache: true
-                fn: ()->
-                    cards = new CardCollection()
-                    # console.log cards, "<"
-                    cards.add @hearts.models
-                    # console.log cards, "< HEARTS"
-                    cards.add @clubs.models
-                    # console.log cards, "< CLUBS"
-                    cards.add @diamonds.models
-                    # console.log cards, "< DIAMONDS"
-                    cards.add @spades.models
-                    # console.log cards, "< SPADES"
-                    return cards
-            pile:
-                deps: ['cards']
-                cache: true
-                fn: ()->
-                    return _ @cards.models
+    Hand = require './lib/hand'
 
+    Dealer = require './lib/dealer'
 
-        initialize: ()->
-            self = @
-            _.each THE_SUITS, (suit)->
-                # console.log "making suit: ", suit
-                twoThroughAce = _.map [2..14], (value)->
-                    # console.log "suit value", suit, value
-                    card = new Card {
-                        suit: suit
-                        value: value
-                    }
-                    return card
-                self[suit] = new CardCollection twoThroughAce
-            return self
+    Player = require './lib/player'
 
-
-
-
-    Hand = CardCollection.extend
-
-
-    Dealer = Model.extend
-        deal: (deck, count)->
-
-    Player = Model.extend
-        session:
-            bet: ['number', false]
-            isDealer: ['boolean', true, false]
-            playOrder: ['number', true, 0]
-        collections:
-            hand: Hand
+    Game = require './lib/game'
 
     module.exports = {
         Deck: Deck
         Card: Card
+        Player: Player
+        Game: Game
     }
 
     

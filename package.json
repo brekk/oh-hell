@@ -4,7 +4,18 @@
   "description": "It's a card game.",
   "main": "app.js",
   "scripts": {
-    "test": "mocha --reporter spec"
+    "build": "npm run clean && npm run create && npm run convert",
+    "clean": "npm run clean-build && npm run clean-public",
+    "clean-build": "rm -rf ./lib",
+    "clean-public": "rm -rf ./public",
+    "create": "npm run create-lib",
+    "create-lib": "(mkdir ./lib || true)",
+    "convert": "npm run convert-models && npm run convert-collections && npm run convert-test",
+    "convert-test": "./node_modules/.bin/coffee --compile --output ./test/ src/coffee/test",
+    "convert-models": "./node_modules/.bin/coffee --compile --output ./lib/ src/coffee/models",
+    "convert-collections": "./node_modules/.bin/coffee --compile --output ./lib/ src/coffee/collections",
+    "test": "npm run build && ./node_modules/.bin/mocha --timeout=10000 --reporter spec",
+    "prepublish": "npm run build"
   },
   "keywords": [
     "cards",
@@ -19,7 +30,12 @@
     "ampersand-collection": "^1.4.5",
     "ampersand-collection-lodash-mixin": "^2.0.1",
     "ampersand-state": "^4.5.4",
+    "debug": "^2.2.0",
     "lodash": "^3.8.0",
     "random-uuid-v4": "0.0.4"
+  },
+  "devDependencies": {
+    "mocha": "^2.2.5",
+    "must": "^0.12.0"
   }
 }
