@@ -26,7 +26,8 @@ module.exports = Player = Model.extend
             ]
             cache: true
             fn: ()->
-                @hand.arrange(@collection.parent.trump.suit, true).where({suit: @collection.parent.trump.suit}).value()
+                if @collection?.parent?.trump?.suit?
+                    return @hand.arrange(@collection.parent.trump.suit, true).where({suit: @collection.parent.trump.suit}).value()
 
     deal: (cardsPerHand)->
         if @isDealer
@@ -47,6 +48,14 @@ module.exports = Player = Model.extend
             console.log "error playing card", e
             if e.stack?
                 console.log e.stack
+
+    randomCard: (visible=false, ofSuit=null)->
+        pile = @hand.pile().shuffle().where({visible: visible})
+        if ofSuit?
+            suits = pile.where({suit: ofSuit}).value()
+            if suits.length > 0
+                return suits[0]
+        return pile.first()
 
     bet: (amount)->
         @activeBet = amount

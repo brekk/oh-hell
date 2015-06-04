@@ -15,24 +15,24 @@
         jimmy = new Player({name: 'Jimmy'})
         game.addPlayer jimmy
 
-        brekk = game.players.models[0]
-        jimmy = game.players.models[1]
+        game.on 'cards:dealt', (dealtCards)->
+            console.log "we will accept betting now", _(dealtCards).groupBy('owner').map((group)-> return _.pluck(group, 'readable')).value()
+            console.log "----- auto betting for jimmy"
+            jimmy.bet jimmy.trumps.length
 
-        game.dealRound 0
-        brekkCards = brekk.hand.arrange(game.trumpSuit, true).pluck('readable').value()
-        jimmyCards = jimmy.hand.arrange(game.trumpSuit, true).pluck('readable').value()
+        game.on 'turn:player', (player, suit)->
+            if player is jimmy
+                console.log "============= auto-playing for jimmy!"
+                unless suit?
+                    suit = null
+                card = jimmy.randomCard(false, suit)
+                jimmy.playCard card
+                console.log "JIMMY SAYS: ", card.readable
 
         game.on 'change:allBetsIn', ()->
-            console.log "all bets in"
-            brekk.playCard brekk.hand.models[0]
+            jimmy.playCard jimmy.randomCard()
 
-        console.log "Brekk's cards: ", brekkCards
-
-        brekk.bet _.size brekk.trumps
-
-        console.log "Jimmy's cards: ", jimmyCards
-
-        jimmy.bet _.size jimmy.trumps
+        game.play()
 
         # console.log brekkCards.length, jimmyCards.length
 
