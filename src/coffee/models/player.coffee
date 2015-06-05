@@ -14,6 +14,8 @@ module.exports = Player = Model.extend
         activeBet: ['number', false]
         isDealer: ['boolean', true, false]
         cheater: ['boolean', true, false]
+        points: ['number', true, 0]
+        tricks: ['number', true, 0]
 
     collections:
         hand: Hand
@@ -34,6 +36,8 @@ module.exports = Player = Model.extend
             Dealer::deal.call @, @collection.parent.deck.shuffledPile, @collection.models, cardsPerHand
 
     addCard: (card)->
+        card.owner = @getId()
+        card.ownerObject = @
         @hand.addCard card
 
     playCard: (card)->
@@ -61,3 +65,10 @@ module.exports = Player = Model.extend
         @activeBet = amount
         @trigger 'bet', amount
         return @
+
+    # returns a playToWin strategy boolean
+    strategy: ()->
+        if @activeBet?
+            if @tricks is @activeBet
+                return false
+        return true

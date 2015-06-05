@@ -5,6 +5,7 @@ debug = require('debug') 'oh-hell:game'
 Model = require 'ampersand-state'
 
 PlayerCollection = require './player-collection'
+Player = require './player'
 CardCollection = require './card-collection'
 
 Deck = require './deck'
@@ -38,6 +39,7 @@ module.exports = Game = Model.extend
         roundFinished: ['boolean', true, false]
         round: ['number', true, 0]
         playerIndex: ['number', true, -1]
+        remainingTricks: ['number', true, 0]
 
     derived:
         totalPlayers:
@@ -83,24 +85,43 @@ module.exports = Game = Model.extend
             throw new TypeError "Expected index to be a number."
         return _.get @players.models, index
 
+    playerByName: (name)->
+        return 
+
+    indexOfPlayer: (player)->
+        name = player
+        if player instanceof Player
+            name = player.name
+        out = _(@players.models).map((player, index)->
+            if player.getId() is name
+                if index isnt 0 # zeroes get compacted
+                    return index
+                return '*'
+            return null
+        ).compact().first()
+        if out is '*' # so we have to uncompact zeroes
+            return 0
+        return out
+
     play: ()->
         @playing = true
         # _.times @totalHands, @dealRound, @
         @round = 0
         @dealRound @round
 
-    dealRound: (index)->
+    dealRound: (roundIndex)->
         try
             self = @
             players = []
             debug "THE ROUND HAS BEGUN"
             if @totalPlayers < 2
                 throw new Error "A minimum of two players are required to play."
-            @dealerIndex = index % @totalPlayers
+            @dealerIndex = roundIndex % @totalPlayers
             counter = 1
             @playerIndex = @dealerIndex + counter
             @assignDealer()
-            @cardsThisRound = @cardsPerHand[index]
+            @cardsThisRound = @cardsPerHand[roundIndex]
+            @remainingTricks = @cardsThisRound
             totalCards = @cardsThisRound * @totalPlayers
             @theBetting = 0
             @betting = []
@@ -115,14 +136,14 @@ module.exports = Game = Model.extend
                 player.hand.remove player.hand.models
 
             @deck.pile.each (card)->
-                card.owner = DECK_OWNER
+                card.reset()
 
             bettors = []
             @allBetsIn = false
             @roundFinished = false
 
-            announceWhichPlayerShouldPlay = (model, index)->
-                console.log "player allowed to play", self.playerAt(index).name
+            announceWhichPlayerShouldPlay = (model, idx)->
+                console.log "player allowed to play", self.playerAt(idx).name
 
             @on 'change:playerIndex', announceWhichPlayerShouldPlay
 
@@ -142,32 +163,51 @@ module.exports = Game = Model.extend
             compareCardsAndDeclareWinnerOfRound = (cards)->
                 winningCard = CardCollection::compare(cards[0], cards[1], self.trump.suit)
                 console.log "winner!", winningCard.readable, winningCard.owner
-                # turnEverythingOff()
-                activePlayerIndex = _.first _.compact self.players.map((player, index)->
-                    if player.getId() is winningCard.owner
-                        if index - 1 >= 0
-                            return (index - 1) % self.players.length
-                        return self.players.length - 1
-                    return
-                )
-                console.log "activePlayerIndex", activePlayerIndex
-                self.playerIndex = activePlayerIndex
                 players = []
+                winner = winningCard.ownerObject
+                winner.tricks += 1
+                self.remainingTricks -= 1
+                console.log winner.name + " has added 1 trick, and currently has approx. " + self.convertTricksToPoints(winner) + " points."
                 _.each cards, (card)->
-                    player = self.players.where({name: card.owner})[0]
+                    player = card.ownerObject
                     player.hand.remove card
-                    card.visible = false
-                    card.owner = DECK_OWNER
-                setPlayerTurn()
+                    card.reset()
+                if self.remainingTricks is 0
+                    self.trigger 'hand:finished', true
+                players.push winner
+                setPlayerTurn(null, winner.name)
 
             @on 'round:finished', compareCardsAndDeclareWinnerOfRound
 
-            setPlayerTurn = (card)->
+            declarePointsAndWinnerOfHand = ()->
+                winner = _(self.players).sortedIndex('tricks').each((player)->
+                    player.points = self.convertTricksToPoints player.tricks
+                    return player
+                ).sortBy('points').first()
+                console.log "#{winner.name} is the winner of the round!"
+                console.log "#{winner.name} has #{winner.points} points."
+                _(self.players).sortedIndex('points').each((player)->
+                    console.log "#{player.name} has #{player.points} points."
+                ).value()
+                self.dealRound roundIndex + 1
+
+
+            @on 'hand:finished', declarePointsAndWinnerOfHand
+
+            setPlayerTurn = (card, player=null)->
                 debug "round played: %s", self.playerIndex
                 if card?.owner?
                     debug "card played by #{card.owner}: #{card.readable}"
                 if self.cardsInPlay.length < self.totalPlayers
-                    self.playerIndex = (self.playerIndex + 1) % self.players.length
+                    if player?
+                        console.log 'given player', player
+                        newIndex = self.indexOfPlayer player
+                        if newIndex?
+                            self.playerIndex = newIndex
+                        else
+                            self.incrementPlayerIndex()
+                    else
+                        self.incrementPlayerIndex()
                     suit = null
                     if card?.suit?
                         suit = card.suit
@@ -194,9 +234,16 @@ module.exports = Game = Model.extend
 
                 player.on 'bet', (bet)->
                     unless _.contains bettors, player.name
+                        sum = 0
+                        _.each self.betting, (givenBet)->
+                            sum += givenBet
+                        if (bet + sum) is self.cardsThisRound
+                            self.trigger 'bet:again', player, sum, "Your bet can't add up to the total cards dealt."
+                            return
                         if (bet <= self.cardsThisRound) and bet >= 0
                             if (self.theBetting + bet) != totalCards
                                 self.theBetting += bet
+                                player.activeBet = bet
                                 self.betting.push bet
                                 bettors.push player
                     else
@@ -218,13 +265,26 @@ module.exports = Game = Model.extend
             if e.stack?
                 console.log e.stack
 
+    incrementPlayerIndex: ()->
+        @playerIndex = (@playerIndex + 1) % @players.length
+        return
+
+    decrementPlayerIndex: ()->
+        if @playerIndex isnt 0
+            @playerIndex = (@playerIndex - 1) % @players.length
+            return
+        @playerIndex = @players.length - 1
+        return
+
     isTrump: (card)->
         return card.suit is @trump.suit
 
-    validPlays: (givenCard, collection, visible=false)->
+    validPlays: (givenCard, collection, playToWin=true, visible=false)->
         self = @
         # validPlays: (comparisonCard, playToWin=true, visible=false)->
-        plays = collection.validPlays givenCard, true, visible
+        if !collection.models? and _.isArray collection
+            collection = new CardCollection collection
+        plays = collection.validPlays givenCard, playToWin, visible
         if plays.hasSuit
             plays.cards = [_.first plays.cards]
             return plays
@@ -233,3 +293,8 @@ module.exports = Game = Model.extend
         if filtered.length isnt 0
             plays.cards = filtered
         return plays
+
+    convertTricksToPoints: (player)->
+        if player.tricks is player.activeBet
+            return player.tricks + 10
+        return player.tricks

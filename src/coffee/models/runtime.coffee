@@ -15,6 +15,12 @@
         jimmy = new Player({name: 'Jimmy'})
         game.addPlayer jimmy
 
+        game.on 'bet:again', (player, sum)->
+            if player is jimmy
+                jimmy.bet 7
+            else
+                console.log "#{player.name}, you can't bet that. Bet again."
+
         game.on 'cards:dealt', (dealtCards)->
             console.log "we will accept betting now", _(dealtCards).groupBy('owner').map((group)-> return _.pluck(group, 'readable')).value()
             console.log "----- auto betting for jimmy"

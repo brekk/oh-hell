@@ -31,6 +31,7 @@ module.exports = Card = Model.extend
             default: ()->
                 return uuid()
         visible: ['boolean', true, false]
+        ownerObject: ['object', false]
     }
     derived: {
         readable:
@@ -52,3 +53,7 @@ module.exports = Card = Model.extend
                     when 14 then barf "ace"
                 return pretty
     }
+    reset: ()->
+        @ownerObject = null
+        @owner = DECK_OWNER
+        @visible = false

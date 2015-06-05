@@ -102,6 +102,7 @@ module.exports = CardCollection = Collection.extend
         return card1
 
     validPlays: (comparisonCard, playToWin=true, visible=false)->
+        console.log @, "comparison.card", if comparisonCard?.readable? then comparisonCard.readable
         unless comparisonCard instanceof Card
             throw new TypeError "Expected card to be an instance of Card."
         self = @
@@ -187,3 +188,9 @@ module.exports = CardCollection = Collection.extend
         if passPile
             return pile
         return pile.value()
+
+    lowestToHighest: ()->
+        return @pile().sortByOrder(['value'], [true]).value()
+
+    highestToLowest: ()->
+        return @pile().sortByOrder(['value'], [false]).value()
