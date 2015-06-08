@@ -99,7 +99,7 @@ module.exports = Player = Model.extend
 
     rankedCards: ()->
         ranks = {
-            C: @faceCards 
+            C: @faceCards
         }
         if @trumpExists()
             ranks.A = @trumpFaceCards
@@ -133,6 +133,7 @@ module.exports = Player = Model.extend
         return true
 
     strategyToBet: ()->
+        self = @
         ranked = @rankedCards()
         lengthRanked = _(ranked).map((tier, name)->
             out = {}
@@ -148,26 +149,30 @@ module.exports = Player = Model.extend
             game = @collection.parent
             probabilityRanked = _(ranked).map((tier, name)->
                 out = {}
-                out[name] = game.deck.probability tier, true, 'decimal'
+                out[name] = self.hand.probability tier, true, 'decimal'
                 return out
             ).reduce((collection, iter)->
                 return _.extend collection, iter
             , {})
             debug "probability ranked:", probabilityRanked
-            if (lengthRanked.A > lengthRanked.F) or (lengthRanked.B > lengthRanked.F)
+            if ((lengthRanked.A > lengthRanked.F) or (lengthRanked.B > lengthRanked.F)) and (lengthRanked.A isnt 0 and lengthRanked.B isnt 0)
                 playToWin = true
-                if lengthRanked.B > lengthRanked.A
+                if (lengthRanked.B > lengthRanked.A) and (lengthRanked.A > 0)
                     debug "ranked by B", lengthRanked.B
+                    debug "bet against the trump we've got, we have at least one trump face card and we can try for a run"
                     bet = lengthRanked.B
                 else
                     debug "ranked by A", lengthRanked.A
+                    debug "bet against our trump face cards"
                     bet = lengthRanked.A
             else if (lengthRanked.F > lengthRanked.A) and (lengthRanked.F > lengthRanked.B)
                 debug "ranked by F", lengthRanked.F
+                debug "bet zero and slough off everything"
                 bet = 0
             else
                 playToWin = false
                 debug "ranked by D", lengthRanked.D
+                debug "bet low and slough off until there's a window"
                 bet = (Math.round Math.random() * 1)
         return {
             playToWin: playToWin

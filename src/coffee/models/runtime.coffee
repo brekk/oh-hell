@@ -46,6 +46,8 @@
                 if suit?
                     validPlays = player.hand.validPlays
                     player.playCard _.first(validPlays, strategy.playToWin).cards
+                else
+                    player.playCard player.hand.arrange(game.trump.suit, false, false, strategy.playToWin)[0]
 
         # we should add a similar 'bet:player', or "turnToBet:player" ()->
 

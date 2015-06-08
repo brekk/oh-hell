@@ -185,7 +185,6 @@ Game = Model.extend
             compareCardsAndDeclareWinnerOfRound = (cards)->
                 winningCard = CardCollection::compare(cards[0], cards[1], self.trump.suit)
                 console.log "winner!", winningCard.readable, winningCard.owner
-                activePlayersThisHand = []
                 winner = winningCard.ownerObject
                 winner.tricks += 1
                 self.remainingTricks -= 1
@@ -198,6 +197,7 @@ Game = Model.extend
                 if self.remainingTricks is 0
                     self.trigger 'hand:finished', true
                 # players.push winner
+                activePlayersThisHand = []
                 setPlayerTurn(null, winner.name)
 
             @on 'round:finished', compareCardsAndDeclareWinnerOfRound
