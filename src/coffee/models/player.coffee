@@ -3,12 +3,15 @@ Model = require 'ampersand-state'
 Hand = require './hand'
 debug = require('debug') 'oh-hell:player'
 
+_ = require 'lodash'
+
 Dealer = require './dealer'
 
 module.exports = Player = Model.extend
     idAttribute: 'name'
     props:
         name: ['string', true]
+        human: ['boolean', true, false]
 
     session:
         activeBet: ['number', false]
@@ -16,11 +19,13 @@ module.exports = Player = Model.extend
         cheater: ['boolean', true, false]
         points: ['number', true, 0]
         tricks: ['number', true, 0]
+        lastBet: ['number', true, -1]
 
     collections:
         hand: Hand
 
     derived:
+
         trumps: 
             deps: [
                 'hand'
@@ -28,8 +33,30 @@ module.exports = Player = Model.extend
             ]
             cache: true
             fn: ()->
-                if @collection?.parent?.trump?.suit?
+                if @trumpExists()
                     return @hand.arrange(@collection.parent.trump.suit, true).where({suit: @collection.parent.trump.suit}).value()
+                return []
+
+        faceCards:
+            deps: [
+                'hand'
+            ]
+            cache: true
+            fn: ()->
+                return @hand.faceCards()
+
+        trumpFaceCards:
+            deps: [
+                'trumps'
+                'faceCards'
+            ]
+            cache: true
+            fn: ()->
+                if @trumpExists()
+                    return _(@trumps).filter((c)->
+                        return c.isFaceCard()
+                    ).value()
+                return @faceCards
 
     deal: (cardsPerHand)->
         if @isDealer
@@ -39,6 +66,9 @@ module.exports = Player = Model.extend
         card.owner = @getId()
         card.ownerObject = @
         @hand.addCard card
+
+    trumpExists: ()->
+        return @collection?.parent?.trump?.suit?
 
     playCard: (card)->
         try
@@ -62,13 +92,84 @@ module.exports = Player = Model.extend
         return pile.first()
 
     bet: (amount)->
+        @lastBet = amount
         @activeBet = amount
         @trigger 'bet', amount
         return @
 
-    # returns a playToWin strategy boolean
-    strategy: ()->
+    rankedCards: ()->
+        ranks = {
+            C: @faceCards 
+        }
+        if @trumpExists()
+            ranks.A = @trumpFaceCards
+            ranks.B = @trumps
+            trump = @collection.parent.trump
+            badCards = (card)->
+                if card.isFaceCard()
+                    return false
+                if card.suit is trump
+                    return false
+                if card.isUnder 3
+                    return true
+                return false
+            mediocreCards = (card)->
+                if card.isFaceCard()
+                    return false
+                if card.suit is trump
+                    return false
+                if card.isOver 3
+                    return true
+                return false
+            worseToBetter = @hand.arrange(trump.suit, true, false, false)
+            ranks.D = worseToBetter.filter(mediocreCards).value()
+            ranks.F = worseToBetter.filter(badCards).value()
+        return ranks
+
+    strategyToPlay: ()->
         if @activeBet?
             if @tricks is @activeBet
                 return false
         return true
+
+    strategyToBet: ()->
+        ranked = @rankedCards()
+        lengthRanked = _(ranked).map((tier, name)->
+            out = {}
+            out[name] = tier.length
+            return out
+        ).reduce((collection, iter)->
+            return _.extend collection, iter
+        , {})
+        debug "length ranked:", lengthRanked
+        playToWin = false
+        bet = 0
+        if @trumpExists()
+            game = @collection.parent
+            probabilityRanked = _(ranked).map((tier, name)->
+                out = {}
+                out[name] = game.deck.probability tier, true, 'decimal'
+                return out
+            ).reduce((collection, iter)->
+                return _.extend collection, iter
+            , {})
+            debug "probability ranked:", probabilityRanked
+            if (lengthRanked.A > lengthRanked.F) or (lengthRanked.B > lengthRanked.F)
+                playToWin = true
+                if lengthRanked.B > lengthRanked.A
+                    debug "ranked by B", lengthRanked.B
+                    bet = lengthRanked.B
+                else
+                    debug "ranked by A", lengthRanked.A
+                    bet = lengthRanked.A
+            else if (lengthRanked.F > lengthRanked.A) and (lengthRanked.F > lengthRanked.B)
+                debug "ranked by F", lengthRanked.F
+                bet = 0
+            else
+                playToWin = false
+                debug "ranked by D", lengthRanked.D
+                bet = (Math.round Math.random() * 1)
+        return {
+            playToWin: playToWin
+            bet: bet
+        }

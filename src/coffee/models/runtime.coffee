@@ -2,40 +2,55 @@
     try
         "use strict"
         _ = require 'lodash'
+        debug = require('debug') 'oh-hell:runtime'
 
         Game = require './game'
         Player = require './player'
         
         game = new Game()
-        brekk = new Player({
+        brekk = new Player
             name: 'Brekk'
-        })
+            human: true
         game.addPlayer brekk
         
-        jimmy = new Player({name: 'Jimmy'})
+        jimmy = new Player name: 'Jimmy'
         game.addPlayer jimmy
 
+        betty = new Player name: 'Betty'
+        game.addPlayer betty
+
         game.on 'bet:again', (player, sum)->
-            if player is jimmy
-                jimmy.bet 7
+            unless player.human
+                console.log "auto betting 7 for #{player.name}"
+                player.bet 7
             else
                 console.log "#{player.name}, you can't bet that. Bet again."
 
         game.on 'cards:dealt', (dealtCards)->
-            console.log "we will accept betting now", _(dealtCards).groupBy('owner').map((group)-> return _.pluck(group, 'readable')).value()
-            console.log "----- auto betting for jimmy"
-            jimmy.bet jimmy.trumps.length
+            console.log "we will accept betting now"
+            _(dealtCards).groupBy('owner').map((group, owner)->
+                return console.log owner, ": ", _.pluck(group, 'readable')
+            ).value()
+            console.log "----- auto betting for non-humans"
+            npcs = game.players.where({human: false})
+            _.each npcs, (npc)->
+                bet = 0
+                possibleBets = game.validBets()
+                strategy = npc.strategyToBet()
+                npc.bet strategy.bet
 
-        game.on 'turn:player', (player, suit)->
-            if player is jimmy
-                console.log "============= auto-playing for jimmy!"
-                unless suit?
-                    suit = null
-                card = jimmy.randomCard(false, suit)
-                jimmy.playCard card
-                console.log "JIMMY SAYS: ", card.readable
+        game.on 'turn:player', (player, cardsInPlay, trump)->
+            unless player.human
+                console.log "============= auto-playing for #{player.name}!"
+                strategy = player.strategyToBet()
+                if suit?
+                    validPlays = player.hand.validPlays
+                    player.playCard _.first(validPlays, strategy.playToWin).cards
+
+        # we should add a similar 'bet:player', or "turnToBet:player" ()->
 
         game.on 'change:allBetsIn', ()->
+            console.log "arguments, to allbets in", arguments
             jimmy.playCard jimmy.randomCard()
 
         game.play()

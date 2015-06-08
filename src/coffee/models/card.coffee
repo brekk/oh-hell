@@ -57,3 +57,12 @@ module.exports = Card = Model.extend
         @ownerObject = null
         @owner = DECK_OWNER
         @visible = false
+
+    isFaceCard: ()->
+        return @value > 10
+
+    isUnder: (value)->
+        return @value < value
+
+    isOver: (value)->
+        return @value > value

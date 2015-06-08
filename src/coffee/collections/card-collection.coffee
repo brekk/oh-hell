@@ -3,6 +3,7 @@
 _ = require 'lodash'
 Collection = require './base-collection'
 Card = require './card'
+Fraction = require 'fraction.js'
 
 debug = require('debug') 'oh-hell:card-collection'
 
@@ -60,23 +61,41 @@ module.exports = CardCollection = Collection.extend
         list = @pile().where({suit: suit}).value()
         return list.length > 0
 
-    probability: (card, givenVisibleCards, invert=false)->
-        unless givenVisibleCards?
-            givenVisibleCards = @models
-        if givenVisibleCards.models?
-            givenVisibleCards = givenVisibleCards.models
-        if 0 is _.size givenVisibleCards
-            throw new Error "Probability that you've given bad data: 100%"
-        givenVisibleCardIds = _.map givenVisibleCards, (card)->
-            return card.getId()
-        possible = @pile.filter((card)->
-            return !_.contains givenVisibleCardIds, card.getId()
-        ).size() + 1
-        total  = @pile.size()
-        ratio = possible / total
-        unless invert
-            return ratio
-        return (total - possible) / total
+    probability: (givenCards, reduce=true, cast='string', invert=false)->
+        if givenCards instanceof Card
+            debug "received Card"
+            givenCards = [givenCards] # box as array
+        else if (givenCards instanceof CardCollection) and (givenCards?.models?)
+            debug "received CardCollection"
+            givenCards = givenCards.models # assign as array
+        if !_.isArray givenCards
+            debug "received Array"
+            throw new TypeError "Expected the givenCards to be either a Card, CardCollection, or an array of Cards."
+        # if 0 is _.size givenCards
+        #     console.log "givenCards aren't anything we recognize", arguments
+        #     throw new Error "Probability that you've given bad data: 100%"
+        givenIds = _.pluck givenCards, 'id'
+        pileRef = @pile
+        if _.isFunction pileRef
+            pileRef = pileRef.apply @
+        total = pileRef.size()
+        possible = pileRef.filter((card)->
+            return _.contains givenIds, card.getId()
+        ).size()
+        debug "total: %s, possible %s", total, possible
+        numerator = possible
+        if invert
+            numerator = total - possible
+        denominator = total
+        ratio = numerator / denominator
+        unless cast is 'decimal'
+            unless reduce
+                return numerator+'/'+denominator
+            frac = new Fraction ratio
+            unless cast is 'fraction'
+                return frac.toFraction()
+            return frac
+        return ratio
 
     compare: (card1, card2, trump)->
         debug "comparing %s to %s", card1.readable, card2.readable
@@ -92,17 +111,18 @@ module.exports = CardCollection = Collection.extend
                 return true
             return false
         if isTrump(card1) and !isTrump(card2)
-            debug " --> ", card1.readable
+            debug " --> %s", card1.readable
             return card1
         if !isTrump(card1) and isTrump(card2)
-            debug " --> ", card2.readable
+            debug " --> %s", card2.readable
             return card2
         # otherwise, the first card wins
-        debug " --> ", card1.readable
+        debug " --> %s", card1.readable
         return card1
 
     validPlays: (comparisonCard, playToWin=true, visible=false)->
-        console.log @, "comparison.card", if comparisonCard?.readable? then comparisonCard.readable
+        self = @
+        console.log "comparison.card", if comparisonCard?.readable? then comparisonCard.readable
         unless comparisonCard instanceof Card
             throw new TypeError "Expected card to be an instance of Card."
         self = @
@@ -154,30 +174,6 @@ module.exports = CardCollection = Collection.extend
         if asPile
             return _ cards
         return cards
-
-    cardAgainst: (played, trump, useSuit, visible=false, playToWin=true)->
-        self = @
-        if played.models?
-            played = played.models
-        if isValidSuit(trump) and _.isBoolean useSuit
-            visible = useSuit
-            useSuit = trump
-        listPile = null
-        # figure out the best of the current collection, given a comparison list, `played`
-        if isValidSuit(trump)
-            listPile = @arrange(trump, true, visible, playToWin)
-        # if we have a useSuit, we should filter for that specific suit
-        if isValidSuit(useSuit)
-            validSuitPile = listPile.filter (c)->
-                return c.suit is useSuit
-        if 0 < _.size validSuitPile
-            listPile = validSuitPile
-        return listPile.value()
-        #     comparison = self.compare(playedCard, _.first listPile)
-        #     if playToWin
-        #         return comparison.getId() isnt playedCard.getId()
-        #     else
-        #         return comparison.getId() is playedCard.getId()
 
     suit: (suit, passPile=true, visible=false)->
         unless isValidSuit suit

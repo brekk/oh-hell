@@ -15,7 +15,6 @@ module.exports = Deck = Model.extend
         clubs: CardCollection
         diamonds: CardCollection
         spades: CardCollection
-        hands: CardCollection
     derived:
         cards:
             deps: THE_SUITS
@@ -61,8 +60,6 @@ module.exports = Deck = Model.extend
             self[suit] = new CardCollection twoThroughAce
         return self
 
-    probability: (card, givenVisibleCards, invert=false)->
-        unless givenVisibleCards?
-            givenVisibleCards = @cards
-        CardCollection::probability.call @, card, givenVisibleCards, invert
-        
+    probability: ()->
+        CardCollection::probability.apply @, arguments
+    

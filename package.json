@@ -31,6 +31,7 @@
     "ampersand-collection-lodash-mixin": "^2.0.1",
     "ampersand-state": "^4.5.4",
     "debug": "^2.2.0",
+    "fraction.js": "^2.2.0",
     "lodash": "^3.8.0",
     "random-uuid-v4": "0.0.4"
   },

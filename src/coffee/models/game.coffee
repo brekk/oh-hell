@@ -12,9 +12,10 @@ Deck = require './deck'
 
 {THE_SUITS, DECK_OWNER, isValidSuit} = require './environment'
 
-module.exports = Game = Model.extend
+Game = Model.extend
     collections:
         players: PlayerCollection
+
     props:
         cardsPerHand:
             required: true
@@ -25,6 +26,7 @@ module.exports = Game = Model.extend
         # 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5
         totalHands: ['number', true, 16]
         bets: ['array', false]
+
     session:
         trump: ['object', false]
         cardsThisRound: ['number', true, 7]
@@ -42,6 +44,7 @@ module.exports = Game = Model.extend
         remainingTricks: ['number', true, 0]
 
     derived:
+
         totalPlayers:
             deps: [
                 'players'
@@ -49,6 +52,7 @@ module.exports = Game = Model.extend
             cache: true
             fn: ()->
                 return @players.models.length
+
         cardsInPlay:
             deps: [
                 'deck'
@@ -58,6 +62,7 @@ module.exports = Game = Model.extend
                 return @deck.pile.filter((card)->
                     return (card.owner isnt DECK_OWNER) and (card.visible)
                 ).value()
+
         activePlayer:
             deps: [
                 'playerIndex'
@@ -71,6 +76,16 @@ module.exports = Game = Model.extend
         self = @
         @deck = new Deck()
         return @
+
+    trumps: (asPile=false)->
+        if @trump?.suit?        
+            self = @
+            pile = @deck.pile.filter((card)->
+                return (card.suit is self.trump.suit)
+            )
+            if asPile
+                return pile
+            return pile.value()
 
     addPlayer: (player)->
         unless @playing
@@ -112,7 +127,7 @@ module.exports = Game = Model.extend
     dealRound: (roundIndex)->
         try
             self = @
-            players = []
+            activePlayersThisHand = []
             debug "THE ROUND HAS BEGUN"
             if @totalPlayers < 2
                 throw new Error "A minimum of two players are required to play."
@@ -127,9 +142,11 @@ module.exports = Game = Model.extend
             @betting = []
 
             announceTheBetting = (model, value)->
-                debug 'the betting has changed to: %s', value
+                debug 'theBetting has changed to: %s sum: %s', self.betting, self.theBetting
+                debug 'valid bets include: %s', self.validBets().join '|'
 
             @on 'change:theBetting', announceTheBetting
+            @on 'change:betting', announceTheBetting
 
             @players.each (player)->
                 # hand models, we're a different breed
@@ -147,9 +164,14 @@ module.exports = Game = Model.extend
 
             @on 'change:playerIndex', announceWhichPlayerShouldPlay
 
-            announcePlayerTurn = (player, suit)->
+            announcePlayerTurn = (player, cardsInPlay, trump)->
                 playerName = player.name
-                debug "It's now the turn of: %s, and they must play %s (if they have it)", playerName, suit
+                unless suit?
+                    debug "It's now the turn of: %s, and they begin the round.", playerName
+                else 
+                    debug "It's now the turn of: %s, and they must play %s (if they have it)", playerName, suit
+                if trump?
+                    self.roundStrategyFor player, cardsInPlay, trump
 
             @on 'turn:player', announcePlayerTurn
 
@@ -163,7 +185,7 @@ module.exports = Game = Model.extend
             compareCardsAndDeclareWinnerOfRound = (cards)->
                 winningCard = CardCollection::compare(cards[0], cards[1], self.trump.suit)
                 console.log "winner!", winningCard.readable, winningCard.owner
-                players = []
+                activePlayersThisHand = []
                 winner = winningCard.ownerObject
                 winner.tricks += 1
                 self.remainingTricks -= 1
@@ -172,9 +194,10 @@ module.exports = Game = Model.extend
                     player = card.ownerObject
                     player.hand.remove card
                     card.reset()
+                    card.visible = true # the cards aren't in play until the hand is over
                 if self.remainingTricks is 0
                     self.trigger 'hand:finished', true
-                players.push winner
+                # players.push winner
                 setPlayerTurn(null, winner.name)
 
             @on 'round:finished', compareCardsAndDeclareWinnerOfRound
@@ -211,7 +234,7 @@ module.exports = Game = Model.extend
                     suit = null
                     if card?.suit?
                         suit = card.suit
-                    self.trigger 'turn:player', self.activePlayer, suit
+                    self.trigger 'turn:player', self.activePlayer, self.cardsInPlay, self.trump
                     return
                 if self.cardsInPlay.length is self.totalPlayers
                     compareCardsAndDeclareWinnerOfRound self.cardsInPlay
@@ -224,11 +247,11 @@ module.exports = Game = Model.extend
                         throw new Error "Unable to play yet, some players haven't voted."
                     debug "CARD PLAYED: %s by %s", card.readable, card.owner
                     card.visible = true
-                    players.push card.owner
-                    console.log "players who've played this round:", players
+                    activePlayersThisHand.push card.owner
+                    console.log "players who've played this round:", activePlayersThisHand
                     self.trigger 'card:played', card
-                    console.log 'self.totalPlayers', players.length, self.totalPlayers
-                    if players.length is self.totalPlayers
+                    console.log 'self.totalPlayers', activePlayersThisHand.length, self.totalPlayers
+                    if activePlayersThisHand.length is self.totalPlayers
                         self.roundFinished = true
                         self.trigger 'round:finished', self.cardsInPlay
 
@@ -242,6 +265,7 @@ module.exports = Game = Model.extend
                             return
                         if (bet <= self.cardsThisRound) and bet >= 0
                             if (self.theBetting + bet) != totalCards
+                                debug "%s bet: %s", player.name, bet
                                 self.theBetting += bet
                                 player.activeBet = bet
                                 self.betting.push bet
@@ -294,7 +318,44 @@ module.exports = Game = Model.extend
             plays.cards = filtered
         return plays
 
+    validBets: ()->
+        if @theBetting is 0
+            return [0..@cardsThisRound]
+        return _.without [0..7], 7 - @theBetting
+
     convertTricksToPoints: (player)->
         if player.tricks is player.activeBet
             return player.tricks + 10
         return player.tricks
+
+    probability: ()->
+        inPlay = @deck.pile.where({visible: true}).value()
+        ownedBySomeone = @deck.pile.reject({owner: DECK_OWNER}).value()
+        ownedBySomeoneOrInPlay = ownedBySomeone.concat inPlay
+        applicator = {
+            models: ownedBySomeoneOrInPlay
+            pile: _ ownedBySomeoneOrInPlay
+        }
+        CardCollection::probability.apply applicator, arguments
+
+    roundStrategyFor: (player, cardsInPlay=null, trump=null)->
+        unless cardsInPlay?
+            cardsInPlay = @cardsInPlay
+        unless trump?
+            trump = @trump
+        firstPlayedCard = _.first cardsInPlay
+        validPlays = _.bind player.hand.validPlays, player.hand
+        if firstPlayedCard?
+            toWin = _.first validPlays(firstPlayedCard, true).cards
+            toLose = _.first validPlays(firstPlayedCard, false).cards
+            if toWin is toLose
+                debug "they should play: #{toWin.readable}"
+            else
+                debug "they should likely play: #{toWin.readable} to win, or #{toLose.readable} to lose."
+
+
+
+Game.Card = require './card'
+Game.CardCollection = CardCollection
+
+module.exports = Game
