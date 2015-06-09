@@ -72,6 +72,10 @@ module.exports = Player = Model.extend
 
     playCard: (card)->
         try
+            if _.isString card
+                debug 'given string "%s"', card
+                card = @hand.pile().where({readable: card}).first()
+                console.log "card!", card.readable
             if !(@hand.has card) or (card.owner isnt @name)
                 unless @cheater
                     throw new Error "Unable to play a card I don't own."

@@ -26,6 +26,13 @@
             else
                 console.log "#{player.name}, you can't bet that. Bet again."
 
+        game.on 'player:mistake', (player, suit)->
+            unless player.human
+                console.log "#{player.name}, you can't play that card, you have to play #{suit}."
+                console.log "The machines made a mistake playing the game. Write more tests."
+            else
+                console.log "#{player.name}, you can't play that card, you have to play #{suit}."
+
         game.on 'cards:dealt', (dealtCards)->
             console.log "we will accept betting now"
             _(dealtCards).groupBy('owner').map((group, owner)->
@@ -43,9 +50,10 @@
             unless player.human
                 console.log "============= auto-playing for #{player.name}!"
                 strategy = player.strategyToBet()
-                if suit?
-                    validPlays = player.hand.validPlays
-                    player.playCard _.first(validPlays, strategy.playToWin).cards
+                if cardsInPlay.length > 0
+                    firstCard = _.first cardsInPlay
+                    validPlays = player.hand.validPlays firstCard, strategy.playToWin
+                    player.playCard _.first validPlays.cards
                 else
                     player.playCard player.hand.arrange(game.trump.suit, false, false, strategy.playToWin)[0]
 
@@ -57,20 +65,10 @@
 
         game.play()
 
-        # console.log brekkCards.length, jimmyCards.length
-
-        # console.log "playing through auto shia"
-        # _.times brekkCards.length, (cardIndex)->
-        #     brekkCard = brekkCards[cardIndex]
-        #     jimmyCard = jimmyCards[cardIndex]
-        #     console.log "brekk plays", brekkCard.readable
-        #     console.log "jimmy plays", jimmyCard.readable
-        #     winningCard = game.compare brekkCard, jimmyCard
-        #     console.log "winner!", winningCard.owner
-
         module.exports = {
             brekk: brekk
             jimmy: jimmy
+            betty: betty
             game: game
 
         }

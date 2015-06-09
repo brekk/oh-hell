@@ -82,7 +82,7 @@ module.exports = CardCollection = Collection.extend
         possible = pileRef.filter((card)->
             return _.contains givenIds, card.getId()
         ).size()
-        debug "total: %s, possible %s", total, possible
+        # debug "total: %s, possible %s", total, possible
         numerator = possible
         if invert
             numerator = total - possible
@@ -98,7 +98,7 @@ module.exports = CardCollection = Collection.extend
         return ratio
 
     compare: (card1, card2, trump)->
-        debug "comparing %s to %s", card1.readable, card2.readable
+        # debug "comparing %s to %s", card1.readable, card2.readable
         if card1.suit is card2.suit
             if card1.value > card2.value
                 return card1
@@ -111,18 +111,14 @@ module.exports = CardCollection = Collection.extend
                 return true
             return false
         if isTrump(card1) and !isTrump(card2)
-            debug " --> %s", card1.readable
             return card1
         if !isTrump(card1) and isTrump(card2)
-            debug " --> %s", card2.readable
             return card2
         # otherwise, the first card wins
-        debug " --> %s", card1.readable
         return card1
 
     validPlays: (comparisonCard, playToWin=true, visible=false)->
         self = @
-        console.log "comparison.card", if comparisonCard?.readable? then comparisonCard.readable
         unless comparisonCard instanceof Card
             throw new TypeError "Expected card to be an instance of Card."
         self = @
@@ -130,7 +126,6 @@ module.exports = CardCollection = Collection.extend
         hasSuit = @hasSuit comparisonCard.suit
         if hasSuit
             cards = @suit(comparisonCard.suit, false, visible)
-            console.log "filtered to suit", comparisonCard.suit
         cards = _(cards).sortByOrder(
             ['suit', 'value'],
             [true, !playToWin]
@@ -154,7 +149,6 @@ module.exports = CardCollection = Collection.extend
             cards: cards
             hasSuit: hasSuit
         }
-
 
     hasTrump: (list, trump)->
         if isValidSuit(list) and 1 is _.size arguments

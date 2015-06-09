@@ -159,17 +159,12 @@ Game = Model.extend
             @allBetsIn = false
             @roundFinished = false
 
-            announceWhichPlayerShouldPlay = (model, idx)->
-                console.log "player allowed to play", self.playerAt(idx).name
-
-            @on 'change:playerIndex', announceWhichPlayerShouldPlay
-
             announcePlayerTurn = (player, cardsInPlay, trump)->
                 playerName = player.name
-                unless suit?
+                unless cardsInPlay.length > 0
                     debug "It's now the turn of: %s, and they begin the round.", playerName
                 else 
-                    debug "It's now the turn of: %s, and they must play %s (if they have it)", playerName, suit
+                    debug "It's now the turn of: %s, and they must play %s (if they have it)", playerName, _.first(cardsInPlay).suit
                 if trump?
                     self.roundStrategyFor player, cardsInPlay, trump
 
@@ -183,6 +178,7 @@ Game = Model.extend
                 self.off 'turn:player', announcePlayerTurn
 
             compareCardsAndDeclareWinnerOfRound = (cards)->
+                console.log "this only figures out the winner based on two players, so it's borked."
                 winningCard = CardCollection::compare(cards[0], cards[1], self.trump.suit)
                 console.log "winner!", winningCard.readable, winningCard.owner
                 winner = winningCard.ownerObject
@@ -245,12 +241,17 @@ Game = Model.extend
                 player.on 'card:play', (card)->
                     unless self.allBetsIn
                         throw new Error "Unable to play yet, some players haven't voted."
+                    firstCardPlayed = _.first self.cardsInPlay
+                    if firstCardPlayed?
+                        if (card.suit isnt firstCardPlayed.suit) and card.ownerObject.hand.hasSuit firstCardPlayed.suit
+                            self.trigger "player:mistake", card.owner, firstCardPlayed.suit
+                            return 
                     debug "CARD PLAYED: %s by %s", card.readable, card.owner
                     card.visible = true
                     activePlayersThisHand.push card.owner
-                    console.log "players who've played this round:", activePlayersThisHand
+                    # console.log "players who've played this round:", activePlayersThisHand
                     self.trigger 'card:played', card
-                    console.log 'self.totalPlayers', activePlayersThisHand.length, self.totalPlayers
+                    # console.log 'self.totalPlayers', activePlayersThisHand.length, self.totalPlayers
                     if activePlayersThisHand.length is self.totalPlayers
                         self.roundFinished = true
                         self.trigger 'round:finished', self.cardsInPlay
