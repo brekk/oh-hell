@@ -30,6 +30,7 @@
     "ampersand-collection": "^1.4.5",
     "ampersand-collection-lodash-mixin": "^2.0.1",
     "ampersand-state": "^4.5.4",
+    "bluebird": "^2.9.27",
     "debug": "^2.2.0",
     "fraction.js": "^2.2.0",
     "lodash": "^3.8.0",

@@ -70,7 +70,7 @@ module.exports = Player = Model.extend
     trumpExists: ()->
         return @collection?.parent?.trump?.suit?
 
-    playCard: (card)->
+    play: (card)->
         try
             if _.isString card
                 debug 'given string "%s"', card
@@ -82,6 +82,7 @@ module.exports = Player = Model.extend
                     @cheater = true
             debug "%s is playing card %s", @name, card.readable
             @trigger 'card:play', card
+            return
         catch e
             console.log "error playing card", e
             if e.stack?

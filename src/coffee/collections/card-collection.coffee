@@ -5,6 +5,8 @@ Collection = require './base-collection'
 Card = require './card'
 Fraction = require 'fraction.js'
 
+Promise = require 'bluebird'
+
 debug = require('debug') 'oh-hell:card-collection'
 
 {THE_SUITS, DECK_OWNER, isValidSuit} = require './environment'
@@ -104,16 +106,19 @@ module.exports = CardCollection = Collection.extend
                 return card1
             else
                 return card2
-        unless isValidSuit trump
-            throw new Error "Expected trump to be one of #{THE_SUITS.join('|')}."
-        isTrump = (card)->
-            if card.suit is trump
-                return true
-            return false
-        if isTrump(card1) and !isTrump(card2)
-            return card1
-        if !isTrump(card1) and isTrump(card2)
-            return card2
+        if trump?
+            if trump.suit?
+                trump = trump.suit
+            unless isValidSuit trump
+                throw new Error "Expected trump to be one of #{THE_SUITS.join('|')}."
+            isTrump = (card)->
+                if card.suit is trump
+                    return true
+                return false
+            if isTrump(card1) and !isTrump(card2)
+                return card1
+            if !isTrump(card1) and isTrump(card2)
+                return card2
         # otherwise, the first card wins
         return card1
 
@@ -184,3 +189,25 @@ module.exports = CardCollection = Collection.extend
 
     highestToLowest: ()->
         return @pile().sortByOrder(['value'], [false]).value()
+
+    compareAll: (cards, trump)->
+        if (cards instanceof Card) or isValidSuit(cards)
+            trump = cards
+            cards = null
+        unless cards?
+            cards = @models
+        self = @
+        p = new Promise (resolve, reject)->
+            done = _.after (cards.length - 1), (theWinner)->
+                console.log "fire!", theWinner.readable
+                resolve theWinner
+            winner = _.first cards
+            _.each _.rest(cards), (card)->
+                comparison = self.compare(winner, card, trump)
+                console.log '   ', winner.readable, 'vs.', card.readable, " is ", comparison.readable
+                if comparison isnt winner
+                    winner = comparison
+                done winner
+        return p
+
+

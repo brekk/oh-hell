@@ -22,8 +22,8 @@ Game = Model.extend
             type: 'object'
             default: _.once ()->
                 return [0..7].reverse().concat [0..7]
-        # 7 6 5 4 3 2 1 0 0 1 2 3 4 5 6 7
-        # 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5
+                # 7 6 5 4 3 2 1 0 0 1 2 3 4 5 6 7
+                # 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5
         totalHands: ['number', true, 16]
         bets: ['array', false]
 
@@ -165,8 +165,8 @@ Game = Model.extend
                     debug "It's now the turn of: %s, and they begin the round.", playerName
                 else 
                     debug "It's now the turn of: %s, and they must play %s (if they have it)", playerName, _.first(cardsInPlay).suit
-                if trump?
-                    self.roundStrategyFor player, cardsInPlay, trump
+                # if trump?
+                #     self.roundStrategyFor player, cardsInPlay, trump
 
             @on 'turn:player', announcePlayerTurn
 
@@ -178,33 +178,39 @@ Game = Model.extend
                 self.off 'turn:player', announcePlayerTurn
 
             compareCardsAndDeclareWinnerOfRound = (cards)->
-                console.log "this only figures out the winner based on two players, so it's borked."
-                winningCard = CardCollection::compare(cards[0], cards[1], self.trump.suit)
-                console.log "winner!", winningCard.readable, winningCard.owner
-                winner = winningCard.ownerObject
-                winner.tricks += 1
-                self.remainingTricks -= 1
-                console.log winner.name + " has added 1 trick, and currently has approx. " + self.convertTricksToPoints(winner) + " points."
-                _.each cards, (card)->
-                    player = card.ownerObject
-                    player.hand.remove card
-                    card.reset()
-                    card.visible = true # the cards aren't in play until the hand is over
-                if self.remainingTricks is 0
-                    self.trigger 'hand:finished', true
-                # players.push winner
-                activePlayersThisHand = []
-                setPlayerTurn(null, winner.name)
+                debug "round over!"
+                promise = CardCollection::compareAll cards, self.trump.suit
+                success = (winningCard)->
+                    debug "winner: %s (%s)", winningCard.readable, winningCard.owner.name
+                    winner = winningCard.ownerObject
+                    winner.tricks += 1
+                    self.remainingTricks -= 1
+                    debug "%s has added 1 trick, and currently has approx. %s points.", winner.name, self.convertTricksToPoints winner
+                    _.each cards, (card)->
+                        player = card.ownerObject
+                        player.hand.remove card
+                        card.reset()
+                        card.visible = true # the cards aren't in play until the hand is over
+                    # players.push winner
+                    activePlayersThisHand = []
+                    setPlayerTurn(null, winner.name)
+                    if self.remainingTricks is 0
+                        self.trigger 'hand:finished', true
+                    return
+                failure = (error)->
+                    throw error
+                promise.then success, failure
 
             @on 'round:finished', compareCardsAndDeclareWinnerOfRound
 
             declarePointsAndWinnerOfHand = ()->
+                debug 'computing winner...'
                 winner = _(self.players).sortedIndex('tricks').each((player)->
                     player.points = self.convertTricksToPoints player.tricks
                     return player
                 ).sortBy('points').first()
-                console.log "#{winner.name} is the winner of the round!"
-                console.log "#{winner.name} has #{winner.points} points."
+                debug "%s is the winner of the round!", winner.name
+                debug "%s has %s points.", winner.name, winner.points
                 _(self.players).sortedIndex('points').each((player)->
                     console.log "#{player.name} has #{player.points} points."
                 ).value()
@@ -215,8 +221,8 @@ Game = Model.extend
 
             setPlayerTurn = (card, player=null)->
                 debug "round played: %s", self.playerIndex
-                if card?.owner?
-                    debug "card played by #{card.owner}: #{card.readable}"
+                # if card?.owner?
+                #     debug "card played by #{card.owner}: #{card.readable}"
                 if self.cardsInPlay.length < self.totalPlayers
                     if player?
                         console.log 'given player', player
@@ -227,13 +233,8 @@ Game = Model.extend
                             self.incrementPlayerIndex()
                     else
                         self.incrementPlayerIndex()
-                    suit = null
-                    if card?.suit?
-                        suit = card.suit
-                    self.trigger 'turn:player', self.activePlayer, self.cardsInPlay, self.trump
-                    return
-                if self.cardsInPlay.length is self.totalPlayers
-                    compareCardsAndDeclareWinnerOfRound self.cardsInPlay
+                self.trigger 'turn:player', self.activePlayer, self.cardsInPlay, self.trump
+                return
 
             @on 'card:played', setPlayerTurn
 
@@ -244,38 +245,42 @@ Game = Model.extend
                     firstCardPlayed = _.first self.cardsInPlay
                     if firstCardPlayed?
                         if (card.suit isnt firstCardPlayed.suit) and card.ownerObject.hand.hasSuit firstCardPlayed.suit
+                            debug "#{player.name}, you have to follow suit!"
                             self.trigger "player:mistake", card.owner, firstCardPlayed.suit
-                            return 
-                    debug "CARD PLAYED: %s by %s", card.readable, card.owner
+                            return
                     card.visible = true
                     activePlayersThisHand.push card.owner
                     # console.log "players who've played this round:", activePlayersThisHand
-                    self.trigger 'card:played', card
                     # console.log 'self.totalPlayers', activePlayersThisHand.length, self.totalPlayers
                     if activePlayersThisHand.length is self.totalPlayers
                         self.roundFinished = true
                         self.trigger 'round:finished', self.cardsInPlay
+                        return
+                    self.trigger 'card:played', card
 
                 player.on 'bet', (bet)->
-                    unless _.contains bettors, player.name
-                        sum = 0
-                        _.each self.betting, (givenBet)->
-                            sum += givenBet
-                        if (bet + sum) is self.cardsThisRound
-                            self.trigger 'bet:again', player, sum, "Your bet can't add up to the total cards dealt."
-                            return
-                        if (bet <= self.cardsThisRound) and bet >= 0
-                            if (self.theBetting + bet) != totalCards
-                                debug "%s bet: %s", player.name, bet
-                                self.theBetting += bet
-                                player.activeBet = bet
-                                self.betting.push bet
-                                bettors.push player
-                    else
+                    if _.contains bettors, player.name
                         throw new Error "This player (#{player.name} has already bet."
+                        return
+                    sum = 0
+                    addBets = (givenBet)->
+                        sum += givenBet
+                    _.each self.betting, addBets
+                    if (bet + sum) is self.cardsThisRound
+                        # Your bet can't add up to the total cards dealt.
+                        self.trigger 'bet:again', player, sum
+                        return
+                    if (bet <= self.cardsThisRound) and (bet >= 0)
+                        if (self.theBetting + bet) != totalCards
+                            debug "%s bet: %s", player.name, bet
+                            self.theBetting += bet
+                            player.activeBet = bet
+                            self.betting.push bet
+                            bettors.push player
                     if bettors.length is self.totalPlayers
                         debug "ALL THE PLAYERS HAVE VOTED."
                         self.allBetsIn = true
+                    return
 
             @dealer.deal @cardsThisRound
             @trump = @deck.pile.shuffle().filter((c)->

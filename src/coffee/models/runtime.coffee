@@ -53,15 +53,16 @@
                 if cardsInPlay.length > 0
                     firstCard = _.first cardsInPlay
                     validPlays = player.hand.validPlays firstCard, strategy.playToWin
-                    player.playCard _.first validPlays.cards
+                    player.play _.first validPlays.cards
                 else
-                    player.playCard player.hand.arrange(game.trump.suit, false, false, strategy.playToWin)[0]
+                    player.play player.hand.arrange(game.trump.suit, false, false, strategy.playToWin)[0]
 
         # we should add a similar 'bet:player', or "turnToBet:player" ()->
 
         game.on 'change:allBetsIn', ()->
             console.log "arguments, to allbets in", arguments
-            jimmy.playCard jimmy.randomCard()
+            player = game.activePlayer
+            player.play player.randomCard()
 
         game.play()
 
