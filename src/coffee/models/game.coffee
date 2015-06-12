@@ -181,7 +181,7 @@ Game = Model.extend
                 debug "round over!"
                 promise = CardCollection::compareAll cards, self.trump.suit
                 success = (winningCard)->
-                    debug "winner: %s (%s)", winningCard.readable, winningCard.owner.name
+                    debug "winner: %s (%s)", winningCard.readable, winningCard.owner
                     winner = winningCard.ownerObject
                     winner.tricks += 1
                     self.remainingTricks -= 1

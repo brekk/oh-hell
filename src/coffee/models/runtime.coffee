@@ -59,8 +59,7 @@
 
         # we should add a similar 'bet:player', or "turnToBet:player" ()->
 
-        game.on 'change:allBetsIn', ()->
-            console.log "arguments, to allbets in", arguments
+        game.on 'change:allBetsIn', ($game, running)->
             player = game.activePlayer
             player.play player.randomCard()
 
