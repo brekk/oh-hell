@@ -21,9 +21,9 @@ Game = Model.extend
             required: true
             type: 'object'
             default: _.once ()->
-                return [0..7].reverse().concat [0..7]
-                # 7 6 5 4 3 2 1 0 0 1 2 3 4 5 6 7
-                # 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5
+                return [1..7].reverse().concat [1..7]
+                # 7 6 5 4 3 2 1 1 2 3 4 5 6 7
+                # 0 1 2 3 4 5 6 7 8 9 0 1 2 3
         totalHands: ['number', true, 16]
         bets: ['array', false]
 
@@ -42,6 +42,7 @@ Game = Model.extend
         round: ['number', true, 0]
         playerIndex: ['number', true, -1]
         remainingTricks: ['number', true, 0]
+        cardsInPlay: ['array', false]
 
     derived:
 
@@ -53,7 +54,7 @@ Game = Model.extend
             fn: ()->
                 return @players.models.length
 
-        cardsInPlay:
+        activeCards:
             deps: [
                 'deck'
             ]
@@ -98,6 +99,7 @@ Game = Model.extend
     playerAt: (index)->
         unless _.isNumber index
             throw new TypeError "Expected index to be a number."
+        index = index % @players.models.length
         return _.get @players.models, index
 
     playerByName: (name)->
@@ -131,15 +133,25 @@ Game = Model.extend
             debug "THE ROUND HAS BEGUN"
             if @totalPlayers < 2
                 throw new Error "A minimum of two players are required to play."
-            @dealerIndex = roundIndex % @totalPlayers
+
+            totalCards = -1
             counter = 1
-            @playerIndex = @dealerIndex + counter
-            @assignDealer()
-            @cardsThisRound = @cardsPerHand[roundIndex]
-            @remainingTricks = @cardsThisRound
-            totalCards = @cardsThisRound * @totalPlayers
-            @theBetting = 0
-            @betting = []
+
+            setInitialSettings = ()->
+                self.cardsInPlay = []
+                # self.dealerIndex = roundIndex % self.totalPlayers
+                counter = 1
+                self.playerIndex = self.dealerIndex + counter
+                self.assignDealer()
+                self.cardsThisRound = self.cardsPerHand[roundIndex]
+                self.remainingTricks = self.cardsThisRound
+                totalCards = self.cardsThisRound * self.totalPlayers
+                self.theBetting = 0
+                self.betting = []
+                self.allBetsIn = false
+                self.roundFinished = false
+
+            setInitialSettings()
 
             announceTheBetting = (model, value)->
                 debug 'theBetting has changed to: %s sum: %s', self.betting, self.theBetting
@@ -156,26 +168,44 @@ Game = Model.extend
                 card.reset()
 
             bettors = []
-            @allBetsIn = false
-            @roundFinished = false
-
-            announcePlayerTurn = (player, cardsInPlay, trump)->
-                playerName = player.name
-                unless cardsInPlay.length > 0
-                    debug "It's now the turn of: %s, and they begin the round.", playerName
-                else 
-                    debug "It's now the turn of: %s, and they must play %s (if they have it)", playerName, _.first(cardsInPlay).suit
-                # if trump?
-                #     self.roundStrategyFor player, cardsInPlay, trump
-
-            @on 'turn:player', announcePlayerTurn
+            removeListeners = []
+            
 
             turnEverythingOff = ()->
-                self.off 'change:playerIndex', announceWhichPlayerShouldPlay
                 self.off 'change:theBetting', announceTheBetting
+                self.off 'change:betting', announceTheBetting
                 self.off 'round:finished', compareCardsAndDeclareWinnerOfRound
-                self.off 'card:played', playNextCard
-                self.off 'turn:player', announcePlayerTurn
+                self.off 'hand:finished', declarePoints
+                self.off 'card:played', setPlayerTurn
+                _.each self.players.models, (player)->
+                    player.tricks = 0
+                    player.activeBet = 0
+                    player.isDealer = false
+                    player.off 'card:play'
+                    player.off 'bet'
+                    return
+                return
+
+            resetCards = (cards, visible=true)->
+                _.each cards, (card)->
+                    player = card.ownerObject
+                    if player?.hand?
+                        player.hand.remove card
+                    card.reset()
+                    card.visible = visible # the cards aren't in play until the hand is over
+                    return
+                return
+
+            announceVisibleCards = ()->
+                self.players.each (player)->
+                    console.log player.name, "8--->", player.hand.pile().groupBy('visible').map((list, title)->
+                        x = {}
+                        x[title] = list.length
+                        return x
+                    ).reduce((x, y)->
+                        return _.assign x, y
+                    , {})
+                return
 
             compareCardsAndDeclareWinnerOfRound = (cards)->
                 debug "round over!"
@@ -186,41 +216,46 @@ Game = Model.extend
                     winner.tricks += 1
                     self.remainingTricks -= 1
                     debug "%s has added 1 trick, and currently has approx. %s points.", winner.name, self.convertTricksToPoints winner
-                    _.each cards, (card)->
-                        player = card.ownerObject
-                        player.hand.remove card
-                        card.reset()
-                        card.visible = true # the cards aren't in play until the hand is over
+                    resetCards cards
+                    announceVisibleCards()
                     # players.push winner
+                    if self.remainingTricks is 0
+                        setTimeout ()->
+                            self.trigger 'hand:finished', true
+                            return
+                        , 400
+                        return
                     activePlayersThisHand = []
                     setPlayerTurn(null, winner.name)
-                    if self.remainingTricks is 0
-                        self.trigger 'hand:finished', true
-                    return
                 failure = (error)->
                     throw error
                 promise.then success, failure
+                return
 
             @on 'round:finished', compareCardsAndDeclareWinnerOfRound
 
-            declarePointsAndWinnerOfHand = ()->
-                debug 'computing winner...'
-                winner = _(self.players).sortedIndex('tricks').each((player)->
-                    player.points = self.convertTricksToPoints player.tricks
-                    return player
-                ).sortBy('points').first()
-                debug "%s is the winner of the round!", winner.name
-                debug "%s has %s points.", winner.name, winner.points
-                _(self.players).sortedIndex('points').each((player)->
-                    console.log "#{player.name} has #{player.points} points."
+            declarePoints = ()->
+                _(self.players.models).map((player)->
+                    if player.activeBet is player.tricks
+                        debug "%s made their bid!", player.name
+                    player.points += self.convertTricksToPoints player
                 ).value()
+                _(self.players.models).sortBy('points').each((player)->
+                    debug "%s has %s points.", player.name, player.points
+                ).value()
+                debug "%s is the current winner of the game!", _(self.players.models).sortBy('points').last().name
+                debug "THE ROUND IS OVER!"
+                turnEverythingOff()
+                resetCards game.deck.models, false
+                announceVisibleCards()
+                setInitialSettings()
                 self.dealRound roundIndex + 1
+                return
 
-
-            @on 'hand:finished', declarePointsAndWinnerOfHand
+            @on 'hand:finished', declarePoints
 
             setPlayerTurn = (card, player=null)->
-                debug "round played: %s", self.playerIndex
+                debug "lastPlayer: %s", self.activePlayer.name
                 # if card?.owner?
                 #     debug "card played by #{card.owner}: #{card.readable}"
                 if self.cardsInPlay.length < self.totalPlayers
@@ -233,15 +268,30 @@ Game = Model.extend
                             self.incrementPlayerIndex()
                     else
                         self.incrementPlayerIndex()
-                self.trigger 'turn:player', self.activePlayer, self.cardsInPlay, self.trump
+                debug "newPlayer: %s", self.activePlayer.name
+                setTimeout ()->
+                    self.trigger 'turn:player', self.activePlayer, self.cardsInPlay, self.trump
+                    return
+                , 400
                 return
 
             @on 'card:played', setPlayerTurn
 
+            alreadyPlayedError = (player)->
+                return new Error "#{player.name} has already played this round."
             @players.each (player)->
-                player.on 'card:play', (card)->
+
+                playCard = (card)->
                     unless self.allBetsIn
                         throw new Error "Unable to play yet, some players haven't voted."
+                    if card?.ownerObject? and card?.owner?
+                        playerAlreadyPlayedCardThisRound = _(self.cardsInPlay).where({owner: card.owner})[0]
+                        if playerAlreadyPlayedCardThisRound? and playerAlreadyPlayedCardThisRound
+                            throw alreadyPlayedError player
+                            return
+                        if _.contains activePlayersThisHand, card.owner
+                            throw alreadyPlayedError player
+                            return
                     firstCardPlayed = _.first self.cardsInPlay
                     if firstCardPlayed?
                         if (card.suit isnt firstCardPlayed.suit) and card.ownerObject.hand.hasSuit firstCardPlayed.suit
@@ -249,16 +299,23 @@ Game = Model.extend
                             self.trigger "player:mistake", card.owner, firstCardPlayed.suit
                             return
                     card.visible = true
+                    self.cardsInPlay.push card
                     activePlayersThisHand.push card.owner
                     # console.log "players who've played this round:", activePlayersThisHand
                     # console.log 'self.totalPlayers', activePlayersThisHand.length, self.totalPlayers
                     if activePlayersThisHand.length is self.totalPlayers
                         self.roundFinished = true
-                        self.trigger 'round:finished', self.cardsInPlay
+                        cardsInPlay = self.cardsInPlay
+                        self.cardsInPlay = []
+                        setTimeout ()->
+                            self.trigger 'round:finished', cardsInPlay
+                            return
+                        , 400
                         return
                     self.trigger 'card:played', card
+                    return
 
-                player.on 'bet', (bet)->
+                makeABet = (bet)->
                     if _.contains bettors, player.name
                         throw new Error "This player (#{player.name} has already bet."
                         return
@@ -281,6 +338,14 @@ Game = Model.extend
                         debug "ALL THE PLAYERS HAVE VOTED."
                         self.allBetsIn = true
                     return
+
+                player.on 'card:play', playCard
+                player.on 'bet', makeABet
+                removeListeners.push ()->
+                    player.off 'card:play', playCard
+                    player.off 'bet', makeABet
+                    return
+                return
 
             @dealer.deal @cardsThisRound
             @trump = @deck.pile.shuffle().filter((c)->
@@ -358,6 +423,9 @@ Game = Model.extend
                 debug "they should play: #{toWin.readable}"
             else
                 debug "they should likely play: #{toWin.readable} to win, or #{toLose.readable} to lose."
+
+    tricks: ()->
+        return @players.tricks()
 
 
 

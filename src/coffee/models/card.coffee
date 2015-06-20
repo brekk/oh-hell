@@ -53,10 +53,15 @@ module.exports = Card = Model.extend
                     when 14 then barf "ace"
                 return pretty
     }
+    toString: ()->
+        return @readable
+        
     reset: ()->
         @ownerObject = null
         @owner = DECK_OWNER
         @visible = false
+        console.log @readable, " : ", @visible
+        return
 
     isFaceCard: ()->
         return @value > 10

@@ -196,6 +196,8 @@ module.exports = CardCollection = Collection.extend
             cards = null
         unless cards?
             cards = @models
+        _.each cards, (card, idx)->
+            console.log idx + ": " + card.readable + "--" + card.owner
         self = @
         p = new Promise (resolve, reject)->
             done = _.after (cards.length - 1), (theWinner)->
@@ -204,10 +206,13 @@ module.exports = CardCollection = Collection.extend
             winner = _.first cards
             _.each _.rest(cards), (card)->
                 comparison = self.compare(winner, card, trump)
-                console.log '   ', winner.readable, 'vs.', card.readable, " is ", comparison.readable
+                # console.log '   ', winner.readable, 'vs.', card.readable, "is", comparison.readable
                 if comparison isnt winner
                     winner = comparison
                 done winner
         return p
+
+    toString: ()->
+        return @pile().pluck('readable').value()
 
 

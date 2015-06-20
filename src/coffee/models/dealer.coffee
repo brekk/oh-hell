@@ -8,6 +8,7 @@ _ = require 'lodash'
 
 module.exports = Dealer = Model.extend
     deal: (cards, players, per=1)->
+        cards = _.shuffle cards
         toDeal = cards.slice 0, per * _.size players
         playerCount = 0
         _.each toDeal, (card)->

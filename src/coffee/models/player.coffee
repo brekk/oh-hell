@@ -63,8 +63,6 @@ module.exports = Player = Model.extend
             Dealer::deal.call @, @collection.parent.deck.shuffledPile, @collection.models, cardsPerHand
 
     addCard: (card)->
-        card.owner = @getId()
-        card.ownerObject = @
         @hand.addCard card
 
     trumpExists: ()->
@@ -75,7 +73,8 @@ module.exports = Player = Model.extend
             if _.isString card
                 debug 'given string "%s"', card
                 card = @hand.pile().where({readable: card}).first()
-                console.log "card!", card.readable
+            unless card?
+                throw new TypeError "Expected string or card."
             if !(@hand.has card) or (card.owner isnt @name)
                 unless @cheater
                     throw new Error "Unable to play a card I don't own."
@@ -97,6 +96,8 @@ module.exports = Player = Model.extend
         return pile.first()
 
     bet: (amount)->
+        unless _.isNumber amount
+            throw new TypeError "Expected bet to be a number."
         @lastBet = amount
         @activeBet = amount
         @trigger 'bet', amount
@@ -108,6 +109,9 @@ module.exports = Player = Model.extend
         }
         if @trumpExists()
             ranks.A = @trumpFaceCards
+            aceTrump = _.where ranks.A, {value: 14}
+            if 0 < _.size aceTrump
+                ranks.AA = aceTrump
             ranks.B = @trumps
             trump = @collection.parent.trump
             badCards = (card)->
@@ -140,46 +144,64 @@ module.exports = Player = Model.extend
     strategyToBet: ()->
         self = @
         ranked = @rankedCards()
-        lengthRanked = _(ranked).map((tier, name)->
+        rank = _(ranked).map((tier, name)->
             out = {}
             out[name] = tier.length
             return out
         ).reduce((collection, iter)->
             return _.extend collection, iter
         , {})
-        debug "length ranked:", lengthRanked
+        debug "length ranked:", rank
         playToWin = false
         bet = 0
         if @trumpExists()
             game = @collection.parent
-            probabilityRanked = _(ranked).map((tier, name)->
-                out = {}
-                out[name] = self.hand.probability tier, true, 'decimal'
-                return out
-            ).reduce((collection, iter)->
-                return _.extend collection, iter
-            , {})
-            debug "probability ranked:", probabilityRanked
-            if ((lengthRanked.A > lengthRanked.F) or (lengthRanked.B > lengthRanked.F)) and (lengthRanked.A isnt 0 and lengthRanked.B isnt 0)
+            # probabilityRanked = _(ranked).map((tier, name)->
+            #     out = {}
+            #     out[name] = self.hand.probability tier, true, 'decimal'
+            #     return out
+            # ).reduce((collection, iter)->
+            #     return _.extend collection, iter
+            # , {})
+            # debug "probability ranked:", probabilityRanked
+
+            if rank.AA? or (
+                    ((rank.A > rank.F) or (rank.B > rank.F))
+                    and ((rank.B > rank.D) or (rank.A > rank.D))
+                    and (rank.A isnt 0 and rank.B isnt 0))
                 playToWin = true
-                if (lengthRanked.B > lengthRanked.A) and (lengthRanked.A > 0)
-                    debug "ranked by B", lengthRanked.B
-                    debug "bet against the trump we've got, we have at least one trump face card and we can try for a run"
-                    bet = lengthRanked.B
+                if (rank.B > rank.A) and (rank.A > 0)
+                    debug "ranked by B", rank.B
+                    bet = rank.B
+                    debug "bet against the trump we've got, we have at least one trump face card and we can try for a run (%s)", bet
                 else
-                    debug "ranked by A", lengthRanked.A
-                    debug "bet against our trump face cards"
-                    bet = lengthRanked.A
-            else if (lengthRanked.F > lengthRanked.A) and (lengthRanked.F > lengthRanked.B)
-                debug "ranked by F", lengthRanked.F
-                debug "bet zero and slough off everything"
+                    debug "ranked by A", rank.A
+                    unless rank.AA?
+                        bet = rank.A
+                        debug "bet against our trump face cards (%s)", bet
+                    else
+                        bet = rank.AA
+                        debug "we have an ace of trump, bet minimum 1."
+            else if (rank.F > rank.A) and (rank.F > rank.B)
+                debug "ranked by F", rank.F
                 bet = 0
+                debug "bet zero and slough off everything (%s)", bet
             else
                 playToWin = false
-                debug "ranked by D", lengthRanked.D
-                debug "bet low and slough off until there's a window"
+                debug "ranked by D", rank.D
                 bet = (Math.round Math.random() * 1)
+                debug "bet low and slough off until there's a window (%s)", bet
         return {
             playToWin: playToWin
             bet: bet
         }
+
+    overBid: ()->
+        if @tricks? and @activeBet?
+            return @tricks > @activeBet
+        return false
+
+    underBid: ()->
+        if @tricks? and @activeBet?
+            return @tricks < @activeBet
+        return false
