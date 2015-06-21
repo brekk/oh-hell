@@ -165,10 +165,11 @@ module.exports = Player = Model.extend
             # , {})
             # debug "probability ranked:", probabilityRanked
 
-            if rank.AA? or (
-                    ((rank.A > rank.F) or (rank.B > rank.F))
-                    and ((rank.B > rank.D) or (rank.A > rank.D))
-                    and (rank.A isnt 0 and rank.B isnt 0))
+            overF = (rank.A > rank.F) or (rank.B > rank.F)
+            overD = (rank.B > rank.D) or (rank.A > rank.D)
+            noABZeroes = (rank.A isnt 0 and rank.B isnt 0)
+
+            if rank.AA? or (overF and overD and noABZeroes)
                 playToWin = true
                 if (rank.B > rank.A) and (rank.A > 0)
                     debug "ranked by B", rank.B
