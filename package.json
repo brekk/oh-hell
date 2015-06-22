@@ -10,9 +10,10 @@
     "clean-public": "rm -rf ./public",
     "create": "npm run create-lib",
     "create-lib": "(mkdir ./lib || true)",
-    "convert": "npm run convert-models && npm run convert-collections && npm run convert-test",
+    "convert": "npm run convert-models && npm run convert-collections && npm run convert-test && npm run convert-utils",
     "convert-test": "./node_modules/.bin/coffee --compile --output ./test/ src/coffee/test",
     "convert-models": "./node_modules/.bin/coffee --compile --output ./lib/ src/coffee/models",
+    "convert-utils": "./node_modules/.bin/coffee --compile --output ./lib/ src/coffee/utils",
     "convert-collections": "./node_modules/.bin/coffee --compile --output ./lib/ src/coffee/collections",
     "test": "npm run build && ./node_modules/.bin/mocha --timeout=10000 --reporter spec",
     "prepublish": "npm run build"
