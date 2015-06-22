@@ -3,7 +3,8 @@
 _ = require 'lodash'
 
 module.exports = Player = (name, human=false, $bus)->
-    debug = require('debug') "player:#{name}"
+    debug = require('debug') "hell:player:#{name}"
+    scanner = require './common-scan'
     player = {
         name: name
         human: human
@@ -19,8 +20,8 @@ module.exports = Player = (name, human=false, $bus)->
     # dunno if this is right yet
     cardsOwnedByPlayer = (card)->
         return card.owner is player.name
-    mergeIncomingStreams = (oldStuff, newStuff)->
-        return _.extend oldStuff, newStuff
+    mergeIncomingStreams = scanner null, (oldStuff, newStuff)->
+        return {outcome: _.extend oldStuff, newStuff}
     $bus.ofType('trump')
         .merge($bus.isTurn())
         .merge($bus.ofTypeForPlayer('hand', name))

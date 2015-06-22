@@ -1,11 +1,12 @@
 "use strict"
 _ = require 'lodash'
 Bacon = require 'baconjs'
+scanner = require './common-scan'
+debug = require('debug') "hell:scoreboard"
 
 Scoreboard = ($bus)->
-    mergeIncomingStreams = (first, next)->
-        return _.assign first, next
-    debug = require('debug') "scoreboard"
+    mergeIncomingStreams = scanner null, (first, next)->
+        return {outcome: _.assign first, next}
     debug "scoreboard initializing..."
     $scorePipe = $bus.ofType('score')
     $trumpPipe = $bus.ofType('trump')

@@ -1,5 +1,4 @@
 "use strict"
-debug = require('debug') 'oh-hell:environment'
 
 SUIT_HEARTS = 'hearts'
 SUIT_CLUBS = 'clubs'

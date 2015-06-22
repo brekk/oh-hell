@@ -1,7 +1,7 @@
 "use strict"
 
 _ = require 'lodash'
-debug = require('debug') 'game'
+debug = require('debug') 'hell:game'
 Deck = require './deck'
 
 Game = (__config__, $bus)->

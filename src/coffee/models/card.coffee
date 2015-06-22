@@ -30,12 +30,10 @@ compareCards = (card1, card2, trump)->
 compareAll = (cards, trump)->
     p = new Promise (resolve, reject)->
         done = _.after (cards.length - 1), (theWinner)->
-            console.log "fire!", theWinner.readable
             resolve theWinner
         winner = _.first cards
         _.each _.rest(cards), (card)->
             comparison = compareCards(winner, card, trump)
-            # console.log '   ', winner.readable, 'vs.', card.readable, "is", comparison.readable
             if comparison isnt winner
                 winner = comparison
             done winner

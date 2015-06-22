@@ -1,7 +1,7 @@
 ((__config__)->
     "use strict"
     debugMaker = require('debug')
-    debugMain = debugMaker 'main'
+    debugMain = debugMaker 'hell:main'
     debugMain "Sanity check..."
 
     Bacon = require 'baconjs'

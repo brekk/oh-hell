@@ -11,19 +11,13 @@ try
 catch e
     shiftArray = require '../utils/shiftable-array.coffee'
 
+StatusEvent = require './status-event'
+
+scanner = require './common-scan'
+debug = require('debug') 'hell:dealer'
+
 module.exports = Dealer = ($bus)->
-    debug = require('debug') 'dealer'
     debug "dealer exists"
-    ###
-    $bus.ofType('players').onValue ($event)->
-        players = $event.players
-        console.log "players", players
-        _.each players, (player)->
-            $bus.push {
-                message: 'player'
-                player: player
-            }
-    ###
     groupPlayers = (first, next)->
         first.push next
         return first
@@ -63,12 +57,18 @@ module.exports = Dealer = ($bus)->
                    .doAction announce
                    .changes()
     $config = $bus.ofType('config')
-    mergeIncomingStreams = (first, next)->
+    flattenPlayers = (first, next)->
         if _.isArray(next) and _.first(next).message is 'player'
             next = {
                 players: _.pluck next, 'player'
             }
-        return _.assign first, next
+        return {
+            first: first
+            next: next
+        }
+    assignContent = (first, next)->
+        return {outcome: _.assign first, next}
+    mergeIncomingStreams = scanner flattenPlayers, assignContent
     $bus.ofType('cards')
         .merge($players)
         .merge($config)

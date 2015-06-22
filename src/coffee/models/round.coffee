@@ -3,17 +3,18 @@ _ = require 'lodash'
 Bacon = require 'baconjs'
 
 {compareAll, compareCards, Card} = require './card'
+scanner = require './common-scan'
 
 Round = ($bus)->
-    debug = require('debug') 'round'
+    debug = require('debug') 'hell:round'
     debug "round created..."
     $roundStart = $bus.ofType('roundStart')
     $trump = $bus.ofType('trump')
     $playCards = $bus.ofType('play')
     $roundEnd = $bus.ofType('roundStart')
     $config = $bus.ofType('config')
-    mergeIncomingStreams = (first, next)->
-        return _.assign first, next
+    mergeIncomingStreams = scanner null, (first, next)->
+        return {outcome: _.assign first, next}
     mergedValueListener = ($event)->
         if $event?.config?.round?
             debug "round begun: %s", $event.config.round
