@@ -1,10 +1,105 @@
 "use strict"
-Model = require 'ampersand-state'
-Hand = require './hand'
-debug = require('debug') 'oh-hell:player'
 
 _ = require 'lodash'
 
+module.exports = Player = (name, human=false, $bus)->
+    debug = require('debug') "player:#{name}"
+    player = {
+        name: name
+        human: human
+        bet: null
+        cards: null
+        toString: ()->
+            return "Player"
+        isHuman: ()->
+            return @human
+        isRobot: ()->
+            return !@human
+    }
+    # dunno if this is right yet
+    cardsOwnedByPlayer = (card)->
+        return card.owner is player.name
+    mergeIncomingStreams = (oldStuff, newStuff)->
+        return _.extend oldStuff, newStuff
+    $bus.ofType('trump')
+        .merge($bus.isTurn())
+        .merge($bus.ofTypeForPlayer('hand', name))
+        .scan({}, mergeIncomingStreams)
+        .changes()
+        .onValue ($event)->
+            if $event.trump? and $event.cards?
+                if !player.cards?
+                    player.cards = $event.cards
+                # debug "trump: %s", $event.trump.readable
+                # debug "hand:", _.pluck $event.cards, 'readable'
+                if $event.role? and $event.turn? and $event.playerIndex? and $event.bets?
+                    if $event.turn is name
+                        betAgain = false
+                        lastBet = null
+                        rollBet = ()->
+                            return Math.floor Math.random() * 4 # $event.cards.length
+                        if $event.role is 'bet:again' and player.bet?
+                            debug("ensuring no duplicate bets...")
+                            lastBet = player.bet
+                            player.bet = null
+                            betAgain = true
+                            $event.role = 'bet'
+                        if $event.role is 'bet' and !player.bet?
+                            bet = rollBet()
+                            reroll = ()->
+                                debug("rerolling...")
+                                bet = rollBet()
+                            reroll() while betAgain and (bet is lastBet)
+                            debug "betting %s", bet
+                            player.bet = bet
+                            $bus.push {
+                                owner: name
+                                player: name
+                                playerObject: player
+                                message: 'bet'
+                                bet: bet
+                                playerIndex: $event.playerIndex
+                                bets: $event.bets
+                            }
+                        randomCard = ()->
+                            cards = $event.cards
+                            randomIndex = Math.floor Math.random() * cards.length
+                            return _.shuffle(cards)[randomIndex]
+                        if $event.role is 'play'
+                            card = randomCard()
+                            debug "Playing card %s", card.readable
+                            $bus.push {
+                                owner: name
+                                player: name
+                                message: 'play'
+                                card: card
+                                cardsInPlay: if $event.cardsInPlay? then $event.cardsInPlay else []
+                                bets: $event.bets
+                                playerIndex: $event.playerIndex
+                                playerObject: player
+                            }
+                        if $event.role is 'play:again' and $event.suit?
+                            card = _($event.cards).where({suit: $event.suit}).first()
+                            debug "Ok, I'll follow suit: %s", card.readable
+                            $bus.push {
+                                owner: name
+                                player: name
+                                message: 'play'
+                                card: card
+                                cardsInPlay: if $event.cardsInPlay? then $event.cardsInPlay else []
+                                bets: $event.bets
+                                playerIndex: $event.playerIndex
+                                playerObject: player
+                            }
+
+    debug "Player created!"
+    $bus.push {
+        message: 'player'
+        player: player
+    }
+    return player
+
+###
 Dealer = require './dealer'
 
 module.exports = Player = Model.extend
@@ -206,3 +301,4 @@ module.exports = Player = Model.extend
         if @tricks? and @activeBet?
             return @tricks < @activeBet
         return false
+###
