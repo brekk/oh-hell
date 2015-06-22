@@ -15,6 +15,7 @@ based on https://github.com/raimohanska/worzone/blob/master/worzone.js
 
         Bacon = require 'baconjs'
         _ = require 'lodash'
+        Promise = require 'bluebird'
 
         THE_SUITS = [
             'clubs'
@@ -24,6 +25,43 @@ based on https://github.com/raimohanska/worzone/blob/master/worzone.js
         ]
 
         DECK_OWNER = 'DECK'
+
+        compareCards = (card1, card2, trump)->
+            # debug "comparing %s to %s", card1.readable, card2.readable
+            if card1.suit is card2.suit
+                if card1.value > card2.value
+                    return card1
+                else
+                    return card2
+            if trump?
+                if trump.suit?
+                    trump = trump.suit
+                unless !_.contains THE_SUITS, trump
+                    throw new Error "Expected trump to be one of #{THE_SUITS.join('|')}."
+                isTrump = (card)->
+                    if card.suit is trump
+                        return true
+                    return false
+                if isTrump(card1) and !isTrump(card2)
+                    return card1
+                if !isTrump(card1) and isTrump(card2)
+                    return card2
+            # otherwise, the first card wins
+            return card1
+
+        compareAll = (cards, trump)->
+            p = new Promise (resolve, reject)->
+                done = _.after (cards.length - 1), (theWinner)->
+                    console.log "fire!", theWinner.readable
+                    resolve theWinner
+                winner = _.first cards
+                _.each _.rest(cards), (card)->
+                    comparison = compareCards(winner, card, trump)
+                    # console.log '   ', winner.readable, 'vs.', card.readable, "is", comparison.readable
+                    if comparison isnt winner
+                        winner = comparison
+                    done winner
+            return p
 
         Card = (value, suit)->
             if !_.isNumber(value) or !_.inRange value, 2, 15
@@ -38,6 +76,8 @@ based on https://github.com/raimohanska/worzone/blob/master/worzone.js
             card.toString = ()->
                 return card.value + ' of ' + card.suit
             card.readable = card.toString()
+            card.compare = (c2, trump)->
+                return compareCards card, c2, trump
             return card
 
         Deck = ()->
@@ -138,6 +178,8 @@ Game > Dealer :: assign-dealer
                                         debug "next player's turn! %s", nextPlayer.name
                                         $bus.plug Bacon.later 100, sendInfo 'bet'
                             if bets.length is totalPlayers
+                                debug "Everyone has bet!"
+                                debug "It's %s's turn to play a card.", nextPlayer.name
                                 $bus.plug Bacon.later 100, sendInfo 'play'
 
 
@@ -151,18 +193,67 @@ Round > Player :: point-winner
             debug = debugMaker 'round'
             debug "round created..."
             $roundStart = $bus.ofType('roundStart')
+            $trump = $bus.ofType('trump')
             $playCards = $bus.ofType('play')
             $roundEnd = $bus.ofType('roundStart')
+            $config = $bus.ofType('config')
             mergeIncomingStreams = (first, next)->
                 return _.assign first, next
-            $config = $bus.ofType('config')
             mergedValueListener = ($event)->
                 if $event?.config?.round?
                     debug "round begun: %s", $event.config.round
             playCardsListener = ($event)->
-                if $event.play? and $event.config?
-                    debug "card played: %s", $event.play.readable
-            $playCards.merge($config).onValue playCardsListener
+                card = _.get $event, 'card'
+                config = _.get $event, 'config'
+                trump = _.get $event, 'trump'
+                player = _.get $event, 'playerObject'
+                if card? and config? and trump? and player?
+                    debug "card attempting to be played: %s", card.readable
+                    totalPlayers = _.size $event.playerSort(0)
+                    if $event.cardsInPlay? and _.isArray $event.cardsInPlay
+                        firstCard = _.first $event.cardsInPlay
+                        if (firstCard?.suit?) and (card.suit isnt firstCard.suit) and (_.contains _.pluck(player.cards, 'suit'), firstCard.suit)
+                            debug "%s, you have to follow suit, and you have %s in your hand.", player.name, firstCard.suit
+                            $bus.plug Bacon.later 100, {
+                                message: "turn"
+                                role: "play:again"
+                                turn: player.name
+                                bets: $event.bets
+                                playerIndex: $event.playerIndex
+                                suit: firstCard.suit
+                            }
+                            return
+                        else
+                            $event.cardsInPlay.push card
+                            if _.size($event.cardsInPlay) is totalPlayers
+                                happy = (card)->
+                                    debug "%s is the winner!", card.owner
+                                sad = (e)->
+                                    console.log "error", e
+                                    if e.stack?
+                                        console.log e.stack
+                                compareAll($event.cardsInPlay).then happy, sad
+
+                                return
+                            else
+                                debug "cards in play: ", _.pluck $event.cardsInPlay, 'readable'
+                                nextPlayerIndex = $event.playerIndex + 1
+                                nextPlayer = _.first $event.playerSort(nextPlayerIndex)
+                                debug "telling next player (%s) to play card!", nextPlayer.name
+                                $bus.plug Bacon.later 100, {
+                                    message: "turn"
+                                    role: "play"
+                                    turn: nextPlayer.name
+                                    playerIndex: nextPlayerIndex
+                                    bets: $event.bets
+                                    cardsInPlay: $event.cardsInPlay
+                                }
+                                return
+            $playCards.merge($roundStart)
+                      .merge($trump)
+                      .merge($config)
+                      .scan({}, mergeIncomingStreams)
+                      .onValue playCardsListener
             $roundStart.merge($config)
                        .scan({}, mergeIncomingStreams)
                        .onValue mergedValueListener
@@ -290,7 +381,9 @@ Dealer > Player :: card-dealt
                         }
                         if _.isFunction playerSort
                             _.each playerSort(dealerIndex + 1), (player, idx)->
-                                chunk = chunks[idx]
+                                chunk = _.map chunks[idx], (card)->
+                                    card.owner = player.name
+                                    return card
                                 debug "dealing hand to player: %s", player.name
                                 $bus.push new Bacon.Next {
                                     message: "hand"
@@ -326,6 +419,7 @@ And the definition of a player:
                 name: name
                 human: human
                 bet: null
+                cards: null
                 toString: ()->
                     return "Player"
                 isHuman: ()->
@@ -345,6 +439,8 @@ And the definition of a player:
                 .changes()
                 .onValue ($event)->
                     if $event.trump? and $event.cards?
+                        if !player.cards?
+                            player.cards = $event.cards
                         # debug "trump: %s", $event.trump.readable
                         # debug "hand:", _.pluck $event.cards, 'readable'
                         if $event.role? and $event.turn? and $event.playerIndex? and $event.bets?
@@ -370,25 +466,41 @@ And the definition of a player:
                                     $bus.push {
                                         owner: name
                                         player: name
+                                        playerObject: player
                                         message: 'bet'
                                         bet: bet
                                         playerIndex: $event.playerIndex
                                         bets: $event.bets
                                     }
-                                else if $event.role is 'play'
-                                    randomCard = ()->
-                                        cards = $event.cards
-                                        randomIndex = Math.floor Math.random() * cards.length
-                                        return _.shuffle(cards)[randomIndex]
+                                randomCard = ()->
+                                    cards = $event.cards
+                                    randomIndex = Math.floor Math.random() * cards.length
+                                    return _.shuffle(cards)[randomIndex]
+                                if $event.role is 'play'
                                     card = randomCard()
+                                    debug "Playing card %s", card.readable
                                     $bus.push {
                                         owner: name
                                         player: name
                                         message: 'play'
-                                        play: card
                                         card: card
+                                        cardsInPlay: if $event.cardsInPlay? then $event.cardsInPlay else []
                                         bets: $event.bets
                                         playerIndex: $event.playerIndex
+                                        playerObject: player
+                                    }
+                                if $event.role is 'play:again' and $event.suit?
+                                    card = _($event.cards).where({suit: $event.suit}).first()
+                                    debug "Ok, I'll follow suit: %s", card.readable
+                                    $bus.push {
+                                        owner: name
+                                        player: name
+                                        message: 'play'
+                                        card: card
+                                        cardsInPlay: if $event.cardsInPlay? then $event.cardsInPlay else []
+                                        bets: $event.bets
+                                        playerIndex: $event.playerIndex
+                                        playerObject: player
                                     }
 
             debug "Player created!"
