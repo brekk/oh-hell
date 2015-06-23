@@ -20,7 +20,7 @@ Players = ($bus)->
         'Master Shake'
         'Ignignokt'
         'Err'
-        'Carl Brutanadilewski'
+        'Carl Brutananadilewski'
     ]
     randomName = ()->
         randomIndex = Math.floor Math.random() * names.length

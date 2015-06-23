@@ -37,7 +37,8 @@
     "debug": "^2.2.0",
     "fraction.js": "^2.2.0",
     "lodash": "^3.8.0",
-    "random-uuid-v4": "0.0.4"
+    "random-uuid-v4": "0.0.4",
+    "slug": "^0.9.1"
   },
   "devDependencies": {
     "mocha": "^2.2.5",

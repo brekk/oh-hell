@@ -105,8 +105,8 @@ module.exports = Dealer = ($bus)->
                                 bets: []
                             }
                     $bus.push new Bacon.Next {
-                        message: "roundStart"
-                        roundStart: true
+                        message: "trickStart"
+                        trickStart: true
                         playerSort: playerSort
                         playerAt: playerAt
                         round: config.round

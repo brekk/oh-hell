@@ -11,18 +11,18 @@ Scoreboard = ($bus)->
     $scorePipe = $bus.ofType('score')
     $trumpPipe = $bus.ofType('trump')
     $betPipe = $bus.ofType('bet')
-    $roundStart = $bus.ofType('roundStart')
+    $trickStart = $bus.ofType('trickStart')
     $config = $bus.ofType('config')
-    $betPipe.merge $roundStart
+    $betPipe.merge $trickStart
             .merge $trumpPipe
             .merge $config
             .scan {}, mergeIncomingStreams
             .changes()
             .onValue ($event)->
-                if $event.bets? and $event.trump? and $event.bet? and $event.roundStart? and $event.config?
+                if $event.bets? and $event.trump? and $event.bet? and $event.trickStart? and $event.config?
                     totalPlayers = $event.playerSort(0).length
                     bets = $event.bets
-                    debug "totalPlayers", totalPlayers
+                    
                     betsRemain = (bets.length + 1 <= totalPlayers)
                     activePlayer = _.first $event.playerSort $event.playerIndex
                     nextPlayerIndex = $event.playerIndex + 1

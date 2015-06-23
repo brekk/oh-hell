@@ -5,19 +5,19 @@ Bacon = require 'baconjs'
 {compareAll, compareCards, Card} = require './card'
 scanner = require './common-scan'
 
-Round = ($bus)->
-    debug = require('debug') 'hell:round'
-    debug "round created..."
-    $roundStart = $bus.ofType('roundStart')
+Trick = ($bus)->
+    debug = require('debug') 'hell:trick'
+    debug "trick created..."
+    $trickStart = $bus.ofType('trickStart')
     $trump = $bus.ofType('trump')
     $playCards = $bus.ofType('play')
-    $roundEnd = $bus.ofType('roundStart')
+    $trickEnd = $bus.ofType('trickStart')
     $config = $bus.ofType('config')
     mergeIncomingStreams = scanner null, (first, next)->
         return {outcome: _.assign first, next}
     mergedValueListener = ($event)->
-        if $event?.config?.round?
-            debug "round begun: %s", $event.config.round
+        if $event?.config?.trick?
+            debug "trick begun: %s", $event.config.trick
     playCardsListener = ($event)->
         card = _.get $event, 'card'
         config = _.get $event, 'config'
@@ -65,13 +65,13 @@ Round = ($bus)->
                             cardsInPlay: $event.cardsInPlay
                         }
                         return
-    $playCards.merge($roundStart)
+    $playCards.merge($trickStart)
               .merge($trump)
               .merge($config)
               .scan({}, mergeIncomingStreams)
               .onValue playCardsListener
-    $roundStart.merge($config)
+    $trickStart.merge($config)
                .scan({}, mergeIncomingStreams)
                .onValue mergedValueListener
 
-module.exports = Round
+module.exports = Trick

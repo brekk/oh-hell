@@ -1,9 +1,11 @@
 "use strict"
 
 _ = require 'lodash'
+slug = require 'slug'
 
 module.exports = Player = (name, human=false, $bus)->
-    debug = require('debug') "hell:player:#{name}"
+    slugName = slug name.toLowerCase()
+    debug = require('debug') "hell:player:#{slugName}"
     scanner = require './common-scan'
     player = {
         name: name

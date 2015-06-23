@@ -15,7 +15,7 @@
 
     Scoreboard = require './scoreboard'
 
-    Round = require './round'
+    Trick = require './trick'
 
     Players = require './players'
 
@@ -58,7 +58,7 @@
             # players: BLT true
         }
         debugMain "beginning round"
-        Round buses.messages
+        Trick buses.messages
         debugMain "establishing scoreboard..."
         Scoreboard buses.messages
         debugMain "assigning dealer..."
